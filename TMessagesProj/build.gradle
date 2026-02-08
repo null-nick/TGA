@@ -50,6 +50,8 @@ dependencies {
     implementation 'com.google.android.play:integrity:1.3.0'
     implementation 'com.google.android.gms:play-services-safetynet:18.0.1'
 
+    implementation 'com.github.ntgcalls:ntgcalls:2.1.0'
+
     implementation 'com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1'
     implementation 'com.google.android.gms:play-services-mlkit-image-labeling:16.0.8'
 
@@ -110,7 +112,7 @@ android {
         externalNativeBuild {
             cmake {
                 version '3.10.2'
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21', '-DUSE_NTGCALLS=OFF' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
             }
         }
     }
@@ -130,6 +132,9 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "0"
+            buildConfigField "boolean", "USE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_TGVOIP", "true"
         }
 
         HA_private {
@@ -145,6 +150,9 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "1"
+            buildConfigField "boolean", "USE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_TGVOIP", "true"
         }
 
         HA_public {
@@ -160,6 +168,9 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "4"
+            buildConfigField "boolean", "USE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_TGVOIP", "true"
         }
 
         HA_hardcore {
@@ -175,6 +186,9 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "5"
+            buildConfigField "boolean", "USE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_TGVOIP", "true"
         }
 
         standalone {
@@ -190,6 +204,9 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "6"
+            buildConfigField "boolean", "USE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_TGVOIP", "true"
         }
 
         release {
@@ -206,6 +223,9 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUILD_HOST_IS_WINDOWS", isWindows
             buildConfigField "int", "VERSION_NUM", "7"
+            buildConfigField "boolean", "USE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_NTGCALLS", "false"
+            buildConfigField "boolean", "ENABLE_TGVOIP", "true"
         }
     }
 

@@ -641,37 +641,67 @@ target_include_directories(${NATIVE_LIB} PUBLIC
 
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
-target_link_libraries(${NATIVE_LIB}
-        -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
-        tgvoip
-        tgcalls
-        tgcalls_tp
+
+if (USE_NTGCALLS)
+    target_link_libraries(${NATIVE_LIB}
+            tgnet
+            flac
+            rlottie
+            sqlite
+            swscale
+            avformat
+            avcodec
+            avresample
+            swresample
+            libvpx
+            libdav1d
+            tde2e
+            tdutils
+            avutil
+            ssl
+            crypto
+            jnigraphics
+            log
+            z
+            GLESv2
+            EGL
+            android
+            OpenSLES
+            cpufeatures
+            breakpad)
+else()
+    target_link_libraries(${NATIVE_LIB}
+            -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
+            tgvoip
+            tgcalls
+            tgcalls_tp
 #        mozjpeg
-        tgnet
-        flac
-        rlottie
-        sqlite
-        swscale
-        avformat
-        avcodec
-        avresample
-        swresample
-        libvpx
-        libdav1d
-        tde2e
-        tdutils
-        avutil
-        ssl
-        crypto
-        jnigraphics
-        log
-        z
-        GLESv2
-        EGL
-        android
-        OpenSLES
-        cpufeatures
-        breakpad)
+            tgnet
+            flac
+            rlottie
+            sqlite
+            swscale
+            avformat
+            avcodec
+            avresample
+            swresample
+            libvpx
+            libdav1d
+            tde2e
+            tdutils
+            avutil
+            ssl
+            crypto
+            jnigraphics
+            log
+            z
+            GLESv2
+            EGL
+            android
+            OpenSLES
+            cpufeatures
+            breakpad)
+endif()
 
 #if (${ANDROID_ABI} STREQUAL "x86" OR ${ANDROID_ABI} STREQUAL "x86_64")
 #    target_link_libraries(${NATIVE_LIB}

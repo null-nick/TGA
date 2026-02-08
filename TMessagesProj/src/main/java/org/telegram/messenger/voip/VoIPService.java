@@ -96,6 +96,7 @@ import org.json.JSONObject;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.ContactsController;
@@ -118,6 +119,9 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.XiaomiUtilities;
 import org.telegram.messenger.utils.tlutils.TlUtils;
+import org.telegram.messenger.voip.NTgCallsEngine;
+import org.telegram.messenger.voip.StockVoIPEngine;
+import org.telegram.messenger.voip.VoIPEngine;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
@@ -292,11 +296,46 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	private TLRPC.TL_dataJSON myParams;
 
 	private int[] mySource = new int[2];
-	private NativeInstance convertingVoip;
-	private NativeInstance[] tgVoip = new NativeInstance[2];
+	private VoIPEngine convertingVoip;
+	private VoIPEngine[] tgVoip = new VoIPEngine[2];
 	private long[] captureDevice = new long[2];
 	private boolean[] destroyCaptureDevice = {true, true};
 	private int[] videoState = {Instance.VIDEO_STATE_INACTIVE, Instance.VIDEO_STATE_INACTIVE};
+	private long createVideoCapturer(VideoSink sink, int type) {
+		if (BuildConfig.ENABLE_NTGCALLS) {
+			return 1;
+		}
+		return NativeInstance.createVideoCapturer(sink, type);
+	}
+
+	private void destroyVideoCapturer(long capturer) {
+		if (BuildConfig.ENABLE_NTGCALLS) {
+			return;
+		}
+		NativeInstance.destroyVideoCapturer(capturer);
+	}
+
+	private void switchCameraCapturer(long capturer, boolean front) {
+		if (BuildConfig.ENABLE_NTGCALLS) {
+			return;
+		}
+		NativeInstance.switchCameraCapturer(capturer, front);
+	}
+
+	private void setVideoStateCapturer(long capturer, int videoState) {
+		if (BuildConfig.ENABLE_NTGCALLS) {
+			return;
+		}
+		NativeInstance.setVideoStateCapturer(capturer, videoState);
+	}
+
+	private String[] getAllVersions() {
+		if (BuildConfig.ENABLE_NTGCALLS) {
+			return new String[] {"2.7.7"};
+		}
+		return NativeInstance.getAllVersions();
+	}
+
 	public boolean isConverting() {
 		return convertingVoip != null;
 	}
@@ -839,7 +878,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 		if (videoCall) {
 			if (Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-				captureDevice[CAPTURE_DEVICE_CAMERA] = NativeInstance.createVideoCapturer(localSink[CAPTURE_DEVICE_CAMERA], isFrontFaceCamera ? 1 : 0);
+				captureDevice[CAPTURE_DEVICE_CAMERA] = createVideoCapturer(localSink[CAPTURE_DEVICE_CAMERA], isFrontFaceCamera ? 1 : 0);
 				if (chatID != 0) {
 					videoState[CAPTURE_DEVICE_CAMERA] = Instance.VIDEO_STATE_PAUSED;
 				} else {
@@ -1099,7 +1138,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				reqCall.protocol.udp_reflector = true;
 				reqCall.protocol.min_layer = CALL_MIN_LAYER;
 				reqCall.protocol.max_layer = Instance.getConnectionMaxLayer();
-				Collections.addAll(reqCall.protocol.library_versions, NativeInstance.getAllVersions());
+				Collections.addAll(reqCall.protocol.library_versions, getAllVersions());
 				VoIPService.this.g_a = g_a;
 				reqCall.g_a_hash = Utilities.computeSHA256(g_a, 0, g_a.length);
 				reqCall.random_id = Utilities.random.nextInt();
@@ -1242,7 +1281,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	public void switchCamera() {
 		if (tgVoip[CAPTURE_DEVICE_CAMERA] == null || !tgVoip[CAPTURE_DEVICE_CAMERA].hasVideoCapturer() || switchingCamera) {
 			if (captureDevice[CAPTURE_DEVICE_CAMERA] != 0 && !switchingCamera) {
-				NativeInstance.switchCameraCapturer(captureDevice[CAPTURE_DEVICE_CAMERA], !isFrontFaceCamera);
+				switchCameraCapturer(captureDevice[CAPTURE_DEVICE_CAMERA], !isFrontFaceCamera);
 			}
 			return;
 		}
@@ -1276,7 +1315,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				tgVoip[CAPTURE_DEVICE_CAMERA].clearVideoCapturer();
 			}
 			if (captureDevice[CAPTURE_DEVICE_CAMERA] != 0) {
-				NativeInstance.destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
+				destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
 				captureDevice[CAPTURE_DEVICE_CAMERA] = 0;
 			}
 		}
@@ -1285,7 +1324,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				if (captureDevice[index] != 0) {
 					return;
 				}
-				captureDevice[index] = NativeInstance.createVideoCapturer(localSink[index], deviceType);
+				captureDevice[index] = createVideoCapturer(localSink[index], deviceType);
 				createGroupInstance(CAPTURE_DEVICE_SCREEN, false, true);
 				setVideoState(true, Instance.VIDEO_STATE_ACTIVE);
 				AccountInstance.getInstance(currentAccount).getNotificationCenter().postNotificationName(NotificationCenter.groupCallScreencastStateChanged);
@@ -1305,7 +1344,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 					return;
 				}
 			}
-			captureDevice[index] = NativeInstance.createVideoCapturer(localSink[index], deviceType);
+			captureDevice[index] = createVideoCapturer(localSink[index], deviceType);
 		}
 	}
 
@@ -1333,7 +1372,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			tgVoip[CAPTURE_DEVICE_CAMERA].clearVideoCapturer();
 		}
 		if (captureDevice[CAPTURE_DEVICE_CAMERA] != 0) {
-			NativeInstance.destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
+			destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
 			captureDevice[CAPTURE_DEVICE_CAMERA] = 0;
 		}
 	}
@@ -1344,9 +1383,9 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		if (tgVoip[trueIndex] == null) {
 			if (captureDevice[index] != 0) {
 				videoState[trueIndex] = state;
-				NativeInstance.setVideoStateCapturer(captureDevice[index], videoState[trueIndex]);
+				setVideoStateCapturer(captureDevice[index], videoState[trueIndex]);
 			} else if (state == Instance.VIDEO_STATE_ACTIVE && currentState != STATE_BUSY && currentState != STATE_ENDED) {
-				captureDevice[index] = NativeInstance.createVideoCapturer(localSink[trueIndex], screencast ? 2 : isFrontFaceCamera ? 1 : 0);
+				captureDevice[index] = createVideoCapturer(localSink[trueIndex], screencast ? 2 : isFrontFaceCamera ? 1 : 0);
 				videoState[trueIndex] = Instance.VIDEO_STATE_ACTIVE;
 			}
 			return;
@@ -1354,7 +1393,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		videoState[trueIndex] = state;
 		tgVoip[trueIndex].setVideoState(videoState[trueIndex]);
 		if (captureDevice[index] != 0) {
-			NativeInstance.setVideoStateCapturer(captureDevice[index], videoState[trueIndex]);
+			setVideoStateCapturer(captureDevice[index], videoState[trueIndex]);
 		}
 		if (!screencast) {
 			if (groupCall != null) {
@@ -1376,9 +1415,9 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				MessagesController.getInstance(currentAccount).processUpdates(updates, false);
 			}
 		});
-		NativeInstance instance = tgVoip[CAPTURE_DEVICE_SCREEN];
+		VoIPEngine instance = tgVoip[CAPTURE_DEVICE_SCREEN];
 		if (instance != null) {
-			Utilities.globalQueue.postRunnable(instance::stopGroup);
+			Utilities.globalQueue.postRunnable(instance::stop);
 		}
 		mySource[CAPTURE_DEVICE_SCREEN] = 0;
 		tgVoip[CAPTURE_DEVICE_SCREEN] = null;
@@ -1865,7 +1904,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		req.protocol.max_layer = Instance.getConnectionMaxLayer();
 		req.protocol.min_layer = CALL_MIN_LAYER;
 		req.protocol.udp_p2p = req.protocol.udp_reflector = true;
-		Collections.addAll(req.protocol.library_versions, NativeInstance.getAllVersions());
+		Collections.addAll(req.protocol.library_versions, getAllVersions());
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 			if (error != null) {
 				callFailed();
@@ -2878,6 +2917,14 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		}
 	}
 
+	private VoIPEngine createEngine() {
+		if (BuildConfig.ENABLE_NTGCALLS && (BuildVars.USE_NTGCALLS || !BuildConfig.ENABLE_TGVOIP)) {
+			return new NTgCallsEngine(this);
+		} else {
+			return new StockVoIPEngine(this);
+		}
+	}
+
 	private void createGroupInstance(int type, boolean switchAccount, boolean isFirst) {
 		if (switchAccount) {
 			mySource[type] = 0;
@@ -2907,7 +2954,60 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			}
 			final boolean[] first = new boolean[] { isFirst };
 			final String logFilePath = BuildVars.DEBUG_VERSION ? VoIPHelper.getLogFilePath("voip_" + type + "_" + logId) : VoIPHelper.getLogFilePath(logId, false);
-			tgVoip[type] = NativeInstance.makeGroup(logFilePath, captureDevice[type], type == CAPTURE_DEVICE_SCREEN, type == CAPTURE_DEVICE_CAMERA && SharedConfig.noiseSupression, (ssrc, json) -> {
+			tgVoip[type] = createEngine();
+			tgVoip[type].setCallback(new VoIPEngine.Callback() {
+				@Override
+				public void onStateUpdated(int state, boolean inTransition) {
+					updateConnectionState(type, state, inTransition);
+				}
+
+				@Override
+				public void onSignalBarsUpdated(int signalBars) {
+				}
+
+				@Override
+				public void onSignalData(byte[] data) {
+				}
+
+				@Override
+				public void onRemoteMediaStateUpdated(int audioState, int videoState) {
+				}
+
+				@Override
+				public void onAudioLevelsUpdated(int[] uids, float[] levels, boolean[] voice) {
+					if (sharedInstance == null || groupCall == null || type != CAPTURE_DEVICE_CAMERA) {
+						return;
+					}
+					groupCall.processVoiceLevelsUpdate(uids, levels, voice);
+					float maxAmplitude = 0;
+					boolean hasOther = false;
+					for (int a = 0; a < uids.length; a++) {
+						if (uids[a] == 0) {
+							if (chat != null && lastTypingTimeSend < SystemClock.uptimeMillis() - 5000 && levels[a] > 0.1f && voice[a]) {
+								lastTypingTimeSend = SystemClock.uptimeMillis();
+								TLRPC.TL_messages_setTyping req = new TLRPC.TL_messages_setTyping();
+								req.action = new TLRPC.TL_speakingInGroupCallAction();
+								req.peer = MessagesController.getInputPeer(chat);
+								ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
+
+								});
+							}
+							NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcMicAmplitudeEvent, levels[a]);
+							continue;
+						}
+						hasOther = true;
+						maxAmplitude = Math.max(maxAmplitude, levels[a]);
+					}
+					if (hasOther) {
+						NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcSpeakerAmplitudeEvent, maxAmplitude);
+						if (audioLevelsCallback != null) {
+							audioLevelsCallback.run(uids, levels, voice);
+						}
+					}
+				}
+			});
+
+			tgVoip[type].startGroup(logFilePath, captureDevice[type], type == CAPTURE_DEVICE_SCREEN, type == CAPTURE_DEVICE_CAMERA && SharedConfig.noiseSupression, (ssrc, json) -> {
 				if (type == CAPTURE_DEVICE_CAMERA) {
 					if (conference != null) {
 						startConferenceGroupCall(false, ssrc, json, !first[0]);
@@ -2918,37 +3018,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				} else {
 					startScreenCapture(ssrc, json);
 				}
-			}, (uids, levels, voice) -> {
-				if (sharedInstance == null || groupCall == null || type != CAPTURE_DEVICE_CAMERA) {
-					return;
-				}
-				groupCall.processVoiceLevelsUpdate(uids, levels, voice);
-				float maxAmplitude = 0;
-				boolean hasOther = false;
-				for (int a = 0; a < uids.length; a++) {
-					if (uids[a] == 0) {
-						if (chat != null && lastTypingTimeSend < SystemClock.uptimeMillis() - 5000 && levels[a] > 0.1f && voice[a]) {
-							lastTypingTimeSend = SystemClock.uptimeMillis();
-							TLRPC.TL_messages_setTyping req = new TLRPC.TL_messages_setTyping();
-							req.action = new TLRPC.TL_speakingInGroupCallAction();
-							req.peer = MessagesController.getInputPeer(chat);
-							ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
-
-							});
-						}
-						NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcMicAmplitudeEvent, levels[a]);
-						continue;
-					}
-					hasOther = true;
-					maxAmplitude = Math.max(maxAmplitude, levels[a]);
-				}
-				if (hasOther) {
-					NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcSpeakerAmplitudeEvent, maxAmplitude);
-					if (audioLevelsCallback != null) {
-						audioLevelsCallback.run(uids, levels, voice);
-					}
-				}
-			}, (taskPtr, unknown) -> {
+			}, null, (taskPtr, unknown) -> {
 				if (sharedInstance == null || groupCall == null || type != CAPTURE_DEVICE_CAMERA) {
 					return;
 				}
@@ -3299,7 +3369,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 					createGroupInstance(CAPTURE_DEVICE_SCREEN, false, true);
 					reconnectScreenCapture = false;
 				}
-				NativeInstance instance = tgVoip[CAPTURE_DEVICE_CAMERA];
+				VoIPEngine instance = tgVoip[CAPTURE_DEVICE_CAMERA];
 				if (instance != null) {
 					if (!micMute) {
 						instance.setMuteMicrophone(false);
@@ -3311,7 +3381,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	}
 
 	public void setParticipantsVolume() {
-		NativeInstance instance = tgVoip[CAPTURE_DEVICE_CAMERA];
+		VoIPEngine instance = tgVoip[CAPTURE_DEVICE_CAMERA];
 		if (instance != null) {
 			for (int a = 0, N = groupCall.participants.size(); a < N; a++) {
 				TLRPC.GroupCallParticipant participant = groupCall.participants.valueAt(a);
@@ -3454,39 +3524,63 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 			boolean newAvailable = "2.7.7".compareTo(privateCall.protocol.library_versions.get(0)) <= 0;
 			if (captureDevice[CAPTURE_DEVICE_CAMERA] != 0 && !newAvailable) {
-				NativeInstance.destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
+				tgVoip[CAPTURE_DEVICE_CAMERA].destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
 				captureDevice[CAPTURE_DEVICE_CAMERA] = 0;
 				videoState[CAPTURE_DEVICE_CAMERA] = Instance.VIDEO_STATE_INACTIVE;
 			}
+
+			tgVoip[CAPTURE_DEVICE_CAMERA] = createEngine();
+
 			if (!isOutgoing) {
 				if (videoCall && (Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)) {
-					captureDevice[CAPTURE_DEVICE_CAMERA] = NativeInstance.createVideoCapturer(localSink[CAPTURE_DEVICE_CAMERA], isFrontFaceCamera ? 1 : 0);
+					captureDevice[CAPTURE_DEVICE_CAMERA] = tgVoip[CAPTURE_DEVICE_CAMERA].createVideoCapturer(localSink[CAPTURE_DEVICE_CAMERA], isFrontFaceCamera ? 1 : 0);
 					videoState[CAPTURE_DEVICE_CAMERA] = Instance.VIDEO_STATE_ACTIVE;
 				} else {
 					videoState[CAPTURE_DEVICE_CAMERA] = Instance.VIDEO_STATE_INACTIVE;
 				}
 			}
-			// init
-			tgVoip[CAPTURE_DEVICE_CAMERA] = Instance.makeInstance(privateCall.protocol.library_versions.get(0), config, persistentStateFilePath, endpoints, proxy, getNetworkType(), encryptionKey, remoteSink[CAPTURE_DEVICE_CAMERA], captureDevice[CAPTURE_DEVICE_CAMERA], (uids, levels, voice) -> {
-				if (sharedInstance == null || privateCall == null) {
-					return;
+			tgVoip[CAPTURE_DEVICE_CAMERA].setCallback(new VoIPEngine.Callback() {
+				@Override
+				public void onStateUpdated(int state, boolean inTransition) {
+					onConnectionStateChanged(state, inTransition);
 				}
-				NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcMicAmplitudeEvent, levels[0]);
-				NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcSpeakerAmplitudeEvent, levels[1]);
-			});
-			tgVoip[CAPTURE_DEVICE_CAMERA].setOnStateUpdatedListener(this::onConnectionStateChanged);
-			tgVoip[CAPTURE_DEVICE_CAMERA].setOnSignalBarsUpdatedListener(this::onSignalBarCountChanged);
-			tgVoip[CAPTURE_DEVICE_CAMERA].setOnSignalDataListener(this::onSignalingData);
-			tgVoip[CAPTURE_DEVICE_CAMERA].setOnRemoteMediaStateUpdatedListener((audioState, videoState) -> AndroidUtilities.runOnUIThread(() -> {
-				remoteAudioState = audioState;
-				remoteVideoState = videoState;
-				checkIsNear();
 
-				for (int a = 0; a < stateListeners.size(); a++) {
-					StateListener l = stateListeners.get(a);
-					l.onMediaStateUpdated(audioState, videoState);
+				@Override
+				public void onSignalBarsUpdated(int signalBars) {
+					onSignalBarCountChanged(signalBars);
 				}
-			}));
+
+				@Override
+				public void onSignalData(byte[] data) {
+					onSignalingData(data);
+				}
+
+				@Override
+				public void onRemoteMediaStateUpdated(int audioState, int videoState) {
+					AndroidUtilities.runOnUIThread(() -> {
+						remoteAudioState = audioState;
+						remoteVideoState = videoState;
+						checkIsNear();
+
+						for (int a = 0; a < stateListeners.size(); a++) {
+							StateListener l = stateListeners.get(a);
+							l.onMediaStateUpdated(audioState, videoState);
+						}
+					});
+				}
+
+				@Override
+				public void onAudioLevelsUpdated(int[] uids, float[] levels, boolean[] voice) {
+					if (sharedInstance == null || privateCall == null) {
+						return;
+					}
+					NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcMicAmplitudeEvent, levels[0]);
+					NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.webRtcSpeakerAmplitudeEvent, levels[1]);
+				}
+			});
+
+			tgVoip[CAPTURE_DEVICE_CAMERA].start(privateCall.protocol.library_versions.get(0), config, persistentStateFilePath, endpoints, proxy, getNetworkType(), encryptionKey, remoteSink[CAPTURE_DEVICE_CAMERA], captureDevice[CAPTURE_DEVICE_CAMERA]);
+
 			tgVoip[CAPTURE_DEVICE_CAMERA].setMuteMicrophone(micMute);
 
 			if (newAvailable != isVideoAvailable) {
@@ -4171,8 +4265,8 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			StatsController.getInstance(currentAccount).incrementTotalCallsTime(getStatsNetworkType(), (int) (getCallDuration() / 1000) % 5);
 			onTgVoipPreStop();
 			if (tgVoip[CAPTURE_DEVICE_CAMERA].isGroup()) {
-				NativeInstance instance = tgVoip[CAPTURE_DEVICE_CAMERA];
-				Utilities.globalQueue.postRunnable(instance::stopGroup);
+				VoIPEngine instance = tgVoip[CAPTURE_DEVICE_CAMERA];
+				Utilities.globalQueue.postRunnable(instance::stop);
 				for (HashMap.Entry<String, Integer> entry : currentStreamRequestTimestamp.entrySet()) {
 					AccountInstance.getInstance(currentAccount).getConnectionsManager().cancelRequest(entry.getValue(), true);
 				}
@@ -4189,14 +4283,14 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		}
 		destroyConverting();
 		if (tgVoip[CAPTURE_DEVICE_SCREEN] != null) {
-			NativeInstance instance = tgVoip[CAPTURE_DEVICE_SCREEN];
-			Utilities.globalQueue.postRunnable(instance::stopGroup);
+			VoIPEngine instance = tgVoip[CAPTURE_DEVICE_SCREEN];
+			Utilities.globalQueue.postRunnable(instance::stop);
 			tgVoip[CAPTURE_DEVICE_SCREEN] = null;
 		}
 		for (int a = 0; a < captureDevice.length; a++) {
 			if (captureDevice[a] != 0) {
 				if (destroyCaptureDevice[a]) {
-					NativeInstance.destroyVideoCapturer(captureDevice[a]);
+					destroyVideoCapturer(captureDevice[a]);
 				}
 				captureDevice[a] = 0;
 			}
@@ -4357,7 +4451,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				req1.protocol.udp_p2p = req1.protocol.udp_reflector = true;
 				req1.protocol.min_layer = CALL_MIN_LAYER;
 				req1.protocol.max_layer = Instance.getConnectionMaxLayer();
-				Collections.addAll(req1.protocol.library_versions, NativeInstance.getAllVersions());
+				Collections.addAll(req1.protocol.library_versions, getAllVersions());
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req1, (response1, error1) -> AndroidUtilities.runOnUIThread(() -> {
 					if (error1 == null) {
 						if (BuildVars.LOGS_ENABLED) {
@@ -4784,7 +4878,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		}
 	}
 
-	private void updateTrafficStats(NativeInstance instance, Instance.TrafficStats trafficStats) {
+	private void updateTrafficStats(VoIPEngine instance, Instance.TrafficStats trafficStats) {
 		if (instance == null) return;
 		if (trafficStats == null) {
 			trafficStats = instance.getTrafficStats();
