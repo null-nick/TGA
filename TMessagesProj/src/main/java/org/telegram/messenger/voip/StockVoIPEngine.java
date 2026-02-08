@@ -20,8 +20,11 @@ public class StockVoIPEngine implements VoIPEngine {
 
     private Callback callback;
 
-    public void start(String version, Instance.Config config, String persistentStateFilePath, Instance.Endpoint[] endpoints, Instance.Proxy proxy, int networkType, Instance.EncryptionKey encryptionKey, VideoSink remoteSink, long videoCapturer, NativeInstance.AudioLevelsCallback audioLevelsCallback) {
-        nativeInstance = Instance.makeInstance(version, config, persistentStateFilePath, endpoints, proxy, networkType, encryptionKey, remoteSink, videoCapturer, audioLevelsCallback);
+    @Override
+    public void start(String version, Instance.Config config, String persistentStateFilePath, Instance.Endpoint[] endpoints, Instance.Proxy proxy, int networkType, Instance.EncryptionKey encryptionKey, VideoSink remoteSink, long videoCapturer) {
+        nativeInstance = Instance.makeInstance(version, config, persistentStateFilePath, endpoints, proxy, networkType, encryptionKey, remoteSink, videoCapturer, (uids, levels, voice) -> {
+            if (callback != null) callback.onAudioLevelsUpdated(uids, levels, voice);
+        });
 
         if (nativeInstance != null) {
             nativeInstance.setOnStateUpdatedListener((state, inTransition) -> {
@@ -40,12 +43,12 @@ public class StockVoIPEngine implements VoIPEngine {
     }
 
     @Override
-    public void start() {
-    }
-
-    @Override
     public void startGroup(String logPath, long videoCapturer, boolean screencast, boolean noiseSupression, NativeInstance.PayloadCallback payloadCallback, NativeInstance.AudioLevelsCallback audioLevelsCallback, NativeInstance.VideoSourcesCallback unknownParticipantsCallback, NativeInstance.RequestBroadcastPartCallback requestBroadcastPartCallback, NativeInstance.RequestBroadcastPartCallback cancelRequestBroadcastPartCallback, NativeInstance.RequestCurrentTimeCallback requestCurrentTimeCallback, boolean isConference) {
-        nativeInstance = NativeInstance.makeGroup(logPath, videoCapturer, screencast, noiseSupression, payloadCallback, audioLevelsCallback, unknownParticipantsCallback, requestBroadcastPartCallback, cancelRequestBroadcastPartCallback, requestCurrentTimeCallback, isConference);
+        nativeInstance = NativeInstance.makeGroup(logPath, videoCapturer, screencast, noiseSupression, payloadCallback,
+                audioLevelsCallback != null ? audioLevelsCallback : (uids, levels, voice) -> {
+                    if (callback != null) callback.onAudioLevelsUpdated(uids, levels, voice);
+                },
+                unknownParticipantsCallback, requestBroadcastPartCallback, cancelRequestBroadcastPartCallback, requestCurrentTimeCallback, isConference);
         if (nativeInstance != null) {
             nativeInstance.setOnStateUpdatedListener((state, inTransition) -> {
                 if (callback != null) callback.onStateUpdated(state, inTransition);

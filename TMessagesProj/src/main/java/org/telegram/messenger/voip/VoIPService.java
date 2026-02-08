@@ -119,9 +119,7 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.XiaomiUtilities;
 import org.telegram.messenger.utils.tlutils.TlUtils;
-import org.telegram.messenger.voip.NTgCallsEngine;
-import org.telegram.messenger.voip.StockVoIPEngine;
-import org.telegram.messenger.voip.VoIPEngine;
+
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
@@ -146,6 +144,7 @@ import org.telegram.ui.VoIPFragment;
 import org.telegram.ui.VoIPPermissionActivity;
 import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
+import org.webrtc.TextureViewRenderer;
 import org.webrtc.voiceengine.WebRtcAudioTrack;
 
 import java.io.BufferedReader;
@@ -301,36 +300,40 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	private long[] captureDevice = new long[2];
 	private boolean[] destroyCaptureDevice = {true, true};
 	private int[] videoState = {Instance.VIDEO_STATE_INACTIVE, Instance.VIDEO_STATE_INACTIVE};
+	private boolean isNtgCallsEnabled() {
+		return BuildVars.USE_NTGCALLS;
+	}
+
 	private long createVideoCapturer(VideoSink sink, int type) {
-		if (BuildConfig.ENABLE_NTGCALLS) {
+		if (isNtgCallsEnabled()) {
 			return 1;
 		}
 		return NativeInstance.createVideoCapturer(sink, type);
 	}
 
 	private void destroyVideoCapturer(long capturer) {
-		if (BuildConfig.ENABLE_NTGCALLS) {
+		if (isNtgCallsEnabled()) {
 			return;
 		}
 		NativeInstance.destroyVideoCapturer(capturer);
 	}
 
 	private void switchCameraCapturer(long capturer, boolean front) {
-		if (BuildConfig.ENABLE_NTGCALLS) {
+		if (isNtgCallsEnabled()) {
 			return;
 		}
 		NativeInstance.switchCameraCapturer(capturer, front);
 	}
 
 	private void setVideoStateCapturer(long capturer, int videoState) {
-		if (BuildConfig.ENABLE_NTGCALLS) {
+		if (isNtgCallsEnabled()) {
 			return;
 		}
 		NativeInstance.setVideoStateCapturer(capturer, videoState);
 	}
 
 	private String[] getAllVersions() {
-		if (BuildConfig.ENABLE_NTGCALLS) {
+		if (isNtgCallsEnabled()) {
 			return new String[] {"2.7.7"};
 		}
 		return NativeInstance.getAllVersions();
@@ -737,23 +740,23 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 		synchronized public void setTarget(VideoSink newTarget) {
 			if (target != newTarget) {
-				if (target != null) {
-					target.setParentSink(null);
+				if (target != null && target instanceof TextureViewRenderer) {
+					((TextureViewRenderer) target).setParentSink(null);
 				}
 				target = newTarget;
-				if (target != null) {
-					target.setParentSink(this);
+				if (target != null && target instanceof TextureViewRenderer) {
+					((TextureViewRenderer) target).setParentSink(this);
 				}
 			}
 		}
 
 		synchronized public void setBackground(VideoSink newBackground) {
-			if (background != null) {
-				background.setParentSink(null);
+			if (background != null && background instanceof TextureViewRenderer) {
+				((TextureViewRenderer) background).setParentSink(null);
 			}
 			background = newBackground;
-			if (background != null) {
-				background.setParentSink(this);
+			if (background != null && background instanceof TextureViewRenderer) {
+				((TextureViewRenderer) background).setParentSink(this);
 			}
 		}
 
@@ -2918,7 +2921,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	}
 
 	private VoIPEngine createEngine() {
-		if (BuildConfig.ENABLE_NTGCALLS && (BuildVars.USE_NTGCALLS || !BuildConfig.ENABLE_TGVOIP)) {
+		if (isNtgCallsEnabled()) {
 			return new NTgCallsEngine(this);
 		} else {
 			return new StockVoIPEngine(this);
@@ -3114,7 +3117,6 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 					}
 				}
 			}, conference != null);
-			tgVoip[type].setOnStateUpdatedListener((state, inTransition) -> updateConnectionState(type, state, inTransition));
 //			if (captureDevice[type] != 0 && type == 0 && convertingVoip != null && convertingVoip.hasVideoCapturer()) {
 //				tgVoip[type].setupOutgoingVideoCreated(captureDevice[type]);
 //			}
@@ -3524,7 +3526,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 			boolean newAvailable = "2.7.7".compareTo(privateCall.protocol.library_versions.get(0)) <= 0;
 			if (captureDevice[CAPTURE_DEVICE_CAMERA] != 0 && !newAvailable) {
-				tgVoip[CAPTURE_DEVICE_CAMERA].destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
+				destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA]);
 				captureDevice[CAPTURE_DEVICE_CAMERA] = 0;
 				videoState[CAPTURE_DEVICE_CAMERA] = Instance.VIDEO_STATE_INACTIVE;
 			}
@@ -3533,7 +3535,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 			if (!isOutgoing) {
 				if (videoCall && (Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)) {
-					captureDevice[CAPTURE_DEVICE_CAMERA] = tgVoip[CAPTURE_DEVICE_CAMERA].createVideoCapturer(localSink[CAPTURE_DEVICE_CAMERA], isFrontFaceCamera ? 1 : 0);
+					captureDevice[CAPTURE_DEVICE_CAMERA] = createVideoCapturer(localSink[CAPTURE_DEVICE_CAMERA], isFrontFaceCamera ? 1 : 0);
 					videoState[CAPTURE_DEVICE_CAMERA] = Instance.VIDEO_STATE_ACTIVE;
 				} else {
 					videoState[CAPTURE_DEVICE_CAMERA] = Instance.VIDEO_STATE_INACTIVE;

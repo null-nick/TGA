@@ -177,9 +177,6 @@ public class NativeLoader {
         }
 
         try {
-            if (BuildConfig.ENABLE_NTGCALLS) {
-                System.loadLibrary("ntgcalls");
-            }
             System.loadLibrary(LIB_NAME);
             nativeLoaded = true;
         } catch (Error e) {

@@ -2,6 +2,7 @@ package org.telegram.messenger.voip;
 
 import io.github.pytgcalls.NTgCalls;
 import io.github.pytgcalls.NetworkInfo;
+import io.github.pytgcalls.exceptions.ConnectionNotFoundException;
 import io.github.pytgcalls.media.AudioDescription;
 import io.github.pytgcalls.media.MediaDescription;
 import io.github.pytgcalls.media.MediaSource;
@@ -10,8 +11,12 @@ import io.github.pytgcalls.media.VideoDescription;
 import io.github.pytgcalls.p2p.RTCServer;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
+import org.webrtc.ContextUtils;
 import org.webrtc.VideoSink;
 
 public class NTgCallsEngine implements VoIPEngine {
@@ -51,21 +56,26 @@ public class NTgCallsEngine implements VoIPEngine {
     }
 
     try {
+      ContextUtils.initialize(ApplicationLoader.applicationContext);
       ntgCalls = new NTgCalls();
 
       ntgCalls.setSignalingDataCallback(
           (callId, data) -> {
-            if (callback != null) {
-              callback.onSignalData(data);
-            }
+            AndroidUtilities.runOnUIThread(() -> {
+              if (callback != null) {
+                callback.onSignalData(data);
+              }
+            });
           });
 
       ntgCalls.setConnectionChangeCallback(
           (chatId, callNetworkState) -> {
-            if (callback != null) {
-              int state = mapNetworkState(callNetworkState.state);
-              callback.onStateUpdated(state, false);
-            }
+            AndroidUtilities.runOnUIThread(() -> {
+              if (callback != null) {
+                int state = mapNetworkState(callNetworkState.state);
+                callback.onStateUpdated(state, false);
+              }
+            });
           });
 
       if (remoteSink != null) {}
@@ -86,7 +96,7 @@ public class NTgCallsEngine implements VoIPEngine {
                   ep.turn,
                   ep.stun,
                   ep.tcp,
-                  ep.peerTag != null ? new String(ep.peerTag) : null));
+                  ep.peerTag));
         }
       }
 
@@ -98,6 +108,23 @@ public class NTgCallsEngine implements VoIPEngine {
       ntgCalls.connectP2P(CALL_ID, rtcServers, libVersions, config.enableP2p);
 
       updateStreamSources();
+
+      // Setup playback (speaker + remote video)
+      // MediaDescription(microphone, speaker, camera, screen)
+      try {
+        AudioDescription playbackAudio = new AudioDescription(
+            MediaSource.DEVICE,
+            NTgCalls.getMediaDevices().speaker.get(0).metadata,
+            true,
+            48000,
+            2);
+        VideoDescription playbackVideo = new VideoDescription(
+            MediaSource.EXTERNAL, "", true, -1, -1, 30);
+        ntgCalls.setStreamSources(CALL_ID, StreamMode.PLAYBACK,
+            new MediaDescription(null, playbackAudio, playbackVideo, null));
+      } catch (Exception e) {
+        FileLog.e("NTgCallsEngine: Error setting up playback", e);
+      }
 
     } catch (Exception e) {
       FileLog.e("NTgCallsEngine: Error starting call", e);
@@ -112,15 +139,18 @@ public class NTgCallsEngine implements VoIPEngine {
           new AudioDescription(
               MediaSource.DEVICE,
               NTgCalls.getMediaDevices().microphone.get(0).metadata,
-              !isMicMuted,
+              true,
               48000,
               2);
 
       VideoDescription videoDesc = null;
       if (isVideoEnabled) {
         String cameraId = "";
-        if (!NTgCalls.getMediaDevices().camera.isEmpty()) {
-          cameraId = NTgCalls.getMediaDevices().camera.get(isFrontCamera ? 1 : 0).metadata;
+        List<?> cameras = NTgCalls.getMediaDevices().camera;
+        if (!cameras.isEmpty()) {
+          int index = isFrontCamera ? 1 : 0;
+          if (index >= cameras.size()) index = 0;
+          cameraId = NTgCalls.getMediaDevices().camera.get(index).metadata;
         }
 
         videoDesc = new VideoDescription(MediaSource.DEVICE, cameraId, true, 1280, 720, 30);
@@ -138,7 +168,8 @@ public class NTgCallsEngine implements VoIPEngine {
     if (state == NetworkInfo.State.CONNECTED) return Instance.STATE_ESTABLISHED;
     if (state == NetworkInfo.State.CONNECTING) return Instance.STATE_WAIT_INIT;
     if (state == NetworkInfo.State.FAILED) return Instance.STATE_FAILED;
-    if (state == NetworkInfo.State.RECONNECTING) return Instance.STATE_RECONNECTING;
+    if (state == NetworkInfo.State.TIMEOUT) return Instance.STATE_FAILED;
+    if (state == NetworkInfo.State.CLOSED) return Instance.STATE_FAILED;
     return Instance.STATE_WAIT_INIT;
   }
 
@@ -161,7 +192,11 @@ public class NTgCallsEngine implements VoIPEngine {
   @Override
   public void onSignalingDataReceive(byte[] data) {
     if (ntgCalls != null) {
-      ntgCalls.sendSignalingData(CALL_ID, data);
+      try {
+        ntgCalls.sendSignalingData(CALL_ID, data);
+      } catch (ConnectionNotFoundException e) {
+        FileLog.e("NTgCallsEngine: sendSignalingData failed", e);
+      }
     }
   }
 
@@ -169,8 +204,12 @@ public class NTgCallsEngine implements VoIPEngine {
   public void setMuteMicrophone(boolean mute) {
     isMicMuted = mute;
     if (ntgCalls != null) {
-      if (mute) ntgCalls.mute(CALL_ID);
-      else ntgCalls.unmute(CALL_ID);
+      try {
+        if (mute) ntgCalls.mute(CALL_ID);
+        else ntgCalls.unmute(CALL_ID);
+      } catch (ConnectionNotFoundException e) {
+        FileLog.e("NTgCallsEngine: mute/unmute failed", e);
+      }
     }
   }
 
@@ -185,20 +224,6 @@ public class NTgCallsEngine implements VoIPEngine {
     isFrontCamera = front;
     updateStreamSources();
   }
-
-  @Override
-  public long createVideoCapturer(VideoSink localSink, int type) {
-    return 1;
-  }
-
-  @Override
-  public void destroyVideoCapturer(long capturerPtr) {}
-
-  @Override
-  public void setVideoStateCapturer(long videoCapturer, int videoState) {}
-
-  @Override
-  public void switchCameraCapturer(long videoCapturer, boolean front) {}
 
   @Override
   public void setupOutgoingVideo(VideoSink localSink, int type) {}
@@ -262,7 +287,7 @@ public class NTgCallsEngine implements VoIPEngine {
 
   @Override
   public String getLastError() {
-    return null;
+    return "";
   }
 
   @Override

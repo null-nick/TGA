@@ -14,6 +14,7 @@ configurations {
 configurations.all {
     exclude group: 'com.google.firebase', module: 'firebase-core'
     exclude group: 'androidx.recyclerview', module: 'recyclerview'
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.stdlib.get()}"
 }
 
 dependencies {
@@ -71,6 +72,12 @@ dependencies {
     implementation 'com.google.android.recaptcha:recaptcha:18.7.1'
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    if (useNtgCalls) {
+        // NTGCalls LIB
+        implementation("io.github.pytgcalls:ntgcalls:2.1.0") {
+            exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        }
+    }
 }
 
 def isWindows = String.valueOf(DefaultNativePlatform.currentOperatingSystem.toFamilyName() == OperatingSystemFamily.WINDOWS)
@@ -80,6 +87,28 @@ android {
     ndkVersion "21.4.7075529" // 26.3.11579264
 
     sourceSets.main.jniLibs.srcDirs = ['./jni/']
+    if (useNtgCalls) {
+        sourceSets.main.java.srcDirs += '../ntgcalls_webrtc/android/app/src/main/java'
+
+        def excludeFromNtgcalls = [
+            'SoftwareVideoEncoderFactory.java',
+            'DefaultVideoEncoderFactory.java',
+            'SoftwareVideoDecoderFactory.java',
+            'DefaultVideoDecoderFactory.java',
+            'TextureViewRenderer.java',
+            'TextureEglRenderer.java',
+            'OrientationHelper.java',
+        ] as Set
+        sourceSets.main.java.exclude { element ->
+            def path = element.relativePath.pathString
+            if (path.startsWith('org/webrtc/') &&
+                path.endsWith('.java') &&
+                excludeFromNtgcalls.contains(element.name)) {
+                return !element.file.path.contains('ntgcalls_webrtc')
+            }
+            return false
+        }
+    }
 
     externalNativeBuild {
         cmake {
@@ -112,7 +141,7 @@ android {
         externalNativeBuild {
             cmake {
                 version '3.10.2'
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21', '-DUSE_NTGCALLS=OFF' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21', "-DUSE_NTGCALLS=${useNtgCalls ? 'ON' : 'OFF'}" //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
             }
         }
     }

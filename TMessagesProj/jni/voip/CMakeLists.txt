@@ -4,12 +4,11 @@ option(USE_NTGCALLS "Use NTgCalls (Prebuilt) instead of Stock TGVoIP" OFF)
 
 if(USE_NTGCALLS)
     message(STATUS "Building with NTgCalls (Prebuilt). TGVoIP/WebRTC compilation DISABLED.")
-    add_definitions(-DENABLE_NTGCALLS)
+    add_definitions(-DUSE_NTGCALLS)
     return()
-else()
-    message(STATUS "Building with Stock TGVoIP/WebRTC.")
-    add_definitions(-DENABLE_TGVOIP)
 endif()
+
+message(STATUS "Building with Stock TGVoIP/WebRTC.")
 
 set(CMAKE_CXX_FLAGS "-std=c++17 -DANDROID -g")
 

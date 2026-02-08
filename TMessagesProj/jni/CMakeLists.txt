@@ -18,6 +18,9 @@ ${CMAKE_HOME_DIRECTORY}/boringssl/lib/${ANDROID_ABI}/libssl.a,
 ${CMAKE_HOME_DIRECTORY}/boringssl/lib/${ANDROID_ABI}/libcrypto.a,
 ${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtde2e.a,
 ${CMAKE_HOME_DIRECTORY}/tde2e/${ANDROID_ABI}/libtdutils.a")
+if (USE_NTGCALLS)
+    string(REGEX REPLACE "-Wl,-Bsymbolic[^ ]*" "-Wl,-Bsymbolic -Wl,--exclude-libs,ALL" CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
+endif()
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     enable_language(ASM)
@@ -639,67 +642,70 @@ target_include_directories(${NATIVE_LIB} PUBLIC
         tde2e/include
 )
 
+if (USE_NTGCALLS)
+    target_include_directories(${NATIVE_LIB} PUBLIC voip/tgcalls voip/webrtc third_party)
+endif()
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
 
-if (USE_NTGCALLS)
-    target_link_libraries(${NATIVE_LIB}
-            tgnet
-            flac
-            rlottie
-            sqlite
-            swscale
-            avformat
-            avcodec
-            avresample
-            swresample
-            libvpx
-            libdav1d
-            tde2e
-            tdutils
-            avutil
-            ssl
-            crypto
-            jnigraphics
-            log
-            z
-            GLESv2
-            EGL
-            android
-            OpenSLES
-            cpufeatures
-            breakpad)
+if (NOT USE_NTGCALLS)
+target_link_libraries(${NATIVE_LIB}
+        -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
+        tgvoip
+        tgcalls
+        tgcalls_tp
+#        mozjpeg
+        tgnet
+        flac
+        rlottie
+        sqlite
+        swscale
+        avformat
+        avcodec
+        avresample
+        swresample
+        libvpx
+        libdav1d
+        tde2e
+        tdutils
+        avutil
+        ssl
+        crypto
+        jnigraphics
+        log
+        z
+        GLESv2
+        EGL
+        android
+        OpenSLES
+        cpufeatures
+        breakpad)
 else()
     target_link_libraries(${NATIVE_LIB}
-            -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
-            tgvoip
-            tgcalls
-            tgcalls_tp
-#        mozjpeg
-            tgnet
-            flac
-            rlottie
+            tgnet 
+            flac 
+            rlottie 
             sqlite
-            swscale
-            avformat
-            avcodec
-            avresample
-            swresample
-            libvpx
+            swscale 
+            avformat 
+            avcodec 
+            avresample 
+            swresample 
+            libvpx 
             libdav1d
-            tde2e
-            tdutils
-            avutil
-            ssl
+            tde2e 
+            tdutils 
+            avutil 
+            ssl 
             crypto
-            jnigraphics
-            log
-            z
-            GLESv2
-            EGL
-            android
+            jnigraphics 
+            log 
+            z 
+            GLESv2 
+            EGL 
+            android 
             OpenSLES
-            cpufeatures
+            cpufeatures 
             breakpad)
 endif()
 

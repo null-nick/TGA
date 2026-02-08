@@ -1,5 +1,7 @@
 package org.telegram.messenger.voip;
 
+import java.nio.ByteBuffer;
+
 import org.webrtc.VideoSink;
 
 public interface VoIPEngine {
@@ -43,14 +45,6 @@ public interface VoIPEngine {
       boolean isConference);
 
   Instance.FinalState stop();
-
-  long createVideoCapturer(VideoSink localSink, int type);
-
-  void destroyVideoCapturer(long capturerPtr);
-
-  void setVideoStateCapturer(long videoCapturer, int videoState);
-
-  void switchCameraCapturer(long videoCapturer, boolean front);
 
   void setMuteMicrophone(boolean mute);
 

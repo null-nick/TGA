@@ -14,7 +14,9 @@
 int registerNativeTgNetFunctions(JavaVM *vm, JNIEnv *env);
 int videoOnJNILoad(JavaVM *vm, JNIEnv *env);
 int imageOnJNILoad(JavaVM *vm, JNIEnv *env);
+#ifndef USE_NTGCALLS
 int tgvoipOnJNILoad(JavaVM *vm, JNIEnv *env);
+#endif
 
 jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 	JNIEnv *env = 0;
@@ -36,7 +38,9 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         return -1;
     }
 
+#ifndef USE_NTGCALLS
     tgvoipOnJNILoad(vm, env);
+#endif
 
 	return JNI_VERSION_1_6;
 }
